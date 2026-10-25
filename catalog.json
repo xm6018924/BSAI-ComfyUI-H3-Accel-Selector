@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "comment": "Family rules for MiniMax-H3 acceleration LoRAs. First match wins, so the list is ordered most-specific first. 'trunk' is omitted where the filename should decide it (the core falls back to filename parsing), and 'build' is deliberately never set here -- the safetensors header is authoritative about the adaln width, which is what actually decides build compatibility.",
+  "rules": [
+    {
+      "id": "pdd_acc",
+      "key_regex": "pdd[_-]?acc|acc[_-]?8step",
+      "kind": "pdd",
+      "loader": "pdd",
+      "h3": true,
+      "recipe": "PDD 8 步（nfe=4 亦官方认可）· sampler=euler · CFG=1.0 · SigmaShift 12.0/3.0 · sigmas 必须接 PDD 节点的输出 → SamplerCustomAdvanced · 强度 1.0/1.0 · 移除其它蒸馏 LoRA · 不要叠 step-cache",
+      "note": "带 PDD 头组，普通 LoRA 加载器读不了，必须走 PDD Acc Apply 节点；该节点只读 models/pdd_acc/ 目录"
+    },
+    {
+      "id": "lightx2v_ref2v_turbo",
+      "name_regex": "ref2v[_-]?turbo|ref2v_turbo",
+      "kind": "turbo",
+      "trunk": "ref2va",
+      "recipe": "LightX2V Ref2V turbo · CFG=1.0 · 强度 1.0（Kijai 建议 0.75）· 4 步版 SigmaShift 12.0/3.0、8 步 768p 版 6.0/3.0 · 步数越少贴参考越弱"
+    },
+    {
+      "id": "lightx2v_fl2v_turbo",
+      "name_regex": "fl2v[_-]?turbo|fl2v_turbo",
+      "kind": "turbo",
+      "trunk": "fl2va",
+      "recipe": "LightX2V FL2V turbo · CFG=1.0 · 强度 1.0 · 4 步 768p 版 SigmaShift 6.0/3.0、8 步版 6.0/3.0"
+    },
+    {
+      "id": "larryvrh_turbo_v4",
+      "name_regex": "turbo_v4|dareties|dmad_full",
+      "kind": "turbo",
+      "trunk": "any",
+      "nfe": 6,
+      "recipe": "larryvrh Turbo v4（step600 EMA）· 6 步为作者推荐 · scheduler=simple · CFG=1.0 · SigmaShift 12.0 / 4–6 · 强度 1.0（社区 0.6–0.8）· 超过 8 步反而过锐"
+    },
+    {
+      "id": "dmad_4step",
+      "name_regex": "dmad[_-]?4step",
+      "kind": "turbo",
+      "trunk": "any",
+      "nfe": 4,
+      "recipe": "DMAD 4 步 · CFG=1.0 · 强度 0.75–1.0 · er_sde 或 sa_solver · 快速运动易糊"
+    },
+    {
+      "id": "hyperflow",
+      "name_regex": "hyperflow",
+      "kind": "hyperflow",
+      "trunk": "any",
+      "nfe": 8,
+      "recipe": "HyperFlow 8 步 · 手动 9 点 sigma: 1.0, 0.931506, 0.839236, 0.703462, 0.5, 0.296538, 0.160764, 0.068494, 0.0 · 或 euler/normal · 强度 1.0"
+    },
+    {
+      "id": "pdmd",
+      "name_regex": "pdmd",
+      "kind": "pdmd",
+      "trunk": "any",
+      "recipe": "PDMD 少步蒸馏 · CFG=1.0 · 强度 1.0 · 步数按文件标称 · 具体 sigma 网格请查该文件模型卡"
+    },
+    {
+      "id": "flashgen",
+      "name_regex": "flashgen",
+      "kind": "flashgen",
+      "trunk": "fl2va",
+      "nfe": 4,
+      "recipe": "FastGen-PDD 4 步 · CFG=1.0 · 强度 1.0 · 该文件是为剪枝基座做的低秩转换版"
+    },
+    {
+      "id": "taomate",
+      "name_regex": "taomate",
+      "kind": "taomate",
+      "trunk": "fl2va",
+      "nfe": 3,
+      "recipe": "TaoMate 3 步（rank128）· CFG=1.0（>1.0 会烧）· sampler=euler · scheduler=simple/linear FlowMatch · 强度 1.0 · 官方只有 FL2VA，Ref2AV 未发布"
+    },
+    {
+      "id": "fasth3",
+      "name_regex": "fasth3|fastvideo[_-]?fasth3",
+      "kind": "faststep",
+      "trunk": "fl2va",
+      "nfe": 4,
+      "recipe": "FastH3 4 步（VSA 变体另带 80% 稀疏注意力）· 固定步数不能改 · 仅 T2V/首尾帧，Ref2VA 未蒸馏 · 官方发布的是 checkpoint，LoRA 适配需 FastVideo 栈"
+    },
+    {
+      "id": "veda_ref2va",
+      "name_regex": "r2va[_-]?veda|veda.*r2va",
+      "kind": "veda",
+      "trunk": "ref2va",
+      "loader": "veda",
+      "h3": true,
+      "recipe": "Veda 稀疏注意力权重（Ref2VA r2va 预览版）· 需配合 BSAI-ComfyUI-VedaSparse 节点使用，不是普通 LoRA 加载流程"
+    },
+    {
+      "id": "veda_fl2va",
+      "name_regex": "t2va[_-]?veda|veda.*t2va",
+      "kind": "veda",
+      "trunk": "fl2va",
+      "loader": "veda",
+      "h3": true,
+      "recipe": "Veda 稀疏注意力权重（T2VA 8nfe 预览版）· 需配合 BSAI-ComfyUI-VedaSparse 节点使用"
+    },
+    {
+      "id": "elm_longlive",
+      "name_regex": "elm[_-]|longlive",
+      "kind": "elm",
+      "trunk": "any",
+      "nfe": 4,
+      "recipe": "ELM LongLive 4 步 · CFG=1.0 · 强度 1.0 · 步数与 sigma 网格请查该文件模型卡"
+    },
+    {
+      "id": "wuli_turbo",
+      "name_regex": "wuli[_-].*turbo",
+      "kind": "turbo",
+      "trunk": "any",
+      "nfe": 4,
+      "recipe": "Wuli Turbo 4 步 · CFG=1.0 · 强度 1.0 · 具体 sigma 网格请查该文件模型卡"
+    },
+    {
+      "id": "generic_turbo",
+      "name_regex": "turbo",
+      "kind": "turbo",
+      "trunk": "any",
+      "recipe": "少步 turbo 蒸馏 · CFG=1.0 · 强度 1.0（噪声大降到 0.6–0.8）· 步数按文件标称 · 不要与其它蒸馏 LoRA 叠加"
+    }
+  ]
+}

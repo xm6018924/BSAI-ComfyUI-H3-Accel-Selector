@@ -1,0 +1,7 @@
+# No extra dependencies: the plugin uses only what ComfyUI already ships.
+# torch + safetensors are both bundled with ComfyUI (portable builds included).
+# The lines below are documentation, not requirements -- installing them
+# separately is never necessary and can break a portable build.
+#
+# torch>=2.0
+# safetensors>=0.4
