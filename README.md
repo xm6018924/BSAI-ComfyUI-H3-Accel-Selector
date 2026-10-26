@@ -152,6 +152,21 @@ HyperFlow 手动 sigma（9 点 = 8 个间隔）：
 
 完整清单用 **H3 Accel Report** 节点出。
 
+## 示例工作流
+
+[`example_workflows/BSAI_H3_Film_Factory_直播带货_手动档_ref2va_int8_accel-selector.json`](example_workflows/BSAI_H3_Film_Factory_直播带货_手动档_ref2va_int8_accel-selector.json)
+— 以 BSAI H3 Film Factory 电影工厂（直播带货手动档、ref2va int8）为底，把四个节点全部接上：
+
+- **LoRA Picker** 串在模型链里（`ComfySwitchNode → Picker → H3LoraStack → Film Factory`）：
+  `minimax_h3_ref2va_int8_convrot` 基座上只列出 ref2va 蒸馏文件，示例选 LightX2V
+  Ref2V turbo 4-step（Film Factory 步数相应改为 4）。同时把上游 `BSAI_SolH3_Loader`
+  的 `lora_name` 设为 `none`，避免两个蒸馏叠加。
+- **Base Info** 与 **Report** 接在 Switch 的 MODEL 输出上，每次运行打印基座判定与
+  全部候选文件的 OK / WARN / MISMATCH 结论（结果用 PreviewAny 显示）。
+- **Fingerprint Bake** 默认旁路，换自定义基座时取消旁路跑一次即可登记指纹。
+
+拖进 ComfyUI 即用；节点组内附中文说明（含换回 PDD 8 步的做法）。
+
 ## 目录
 
 ```
@@ -162,6 +177,7 @@ BSAI-ComfyUI-H3-Accel-Selector/
 ├── catalog.json             加速系族规则 + 配方
 ├── fingerprints/            主干指纹（fp16 video_out）
 ├── web/h3_accel.js          下拉框实时筛选
+├── example_workflows/       示例工作流（H3 Film Factory 电影工厂）
 └── tests/test_h3_accel.py   自测
 ```
 
@@ -358,6 +374,26 @@ A **Ref2VA trunk + INT8 ConvRot full build** (~31.7 GiB, dense adaln 2688).
 
 Run **H3 Accel Report** for the full list against your own base.
 
+## Example workflow
+
+[`example_workflows/BSAI_H3_Film_Factory_直播带货_手动档_ref2va_int8_accel-selector.json`](example_workflows/BSAI_H3_Film_Factory_直播带货_手动档_ref2va_int8_accel-selector.json)
+— the BSAI H3 Film Factory live-streaming (manual mode, ref2va int8) workflow with all
+four nodes wired in:
+
+- **LoRA Picker** sits inline in the model chain (`ComfySwitchNode → Picker →
+  H3LoraStack → Film Factory`): on the `minimax_h3_ref2va_int8_convrot` base it lists
+  only ref2va-distilled files. The example picks LightX2V Ref2V turbo 4-step
+  (Film Factory steps are set to 4 accordingly), and the upstream `BSAI_SolH3_Loader`
+  gets `lora_name = none` so two distillations don't stack.
+- **Base Info** and **Report** tap the Switch's MODEL output and print the base verdict
+  plus every candidate's OK / WARN / MISMATCH conclusion on each run (shown via
+  PreviewAny).
+- **Fingerprint Bake** is bypassed by default; un-bypass it once when you switch to a
+  custom base to register its fingerprint.
+
+Drag it into ComfyUI and run. The node group carries Chinese notes, including how to
+switch back to the PDD 8-step path.
+
 ## Layout
 
 ```
@@ -368,6 +404,7 @@ BSAI-ComfyUI-H3-Accel-Selector/
 ├── catalog.json             acceleration family rules + recipes
 ├── fingerprints/            trunk fingerprints (fp16 video_out)
 ├── web/h3_accel.js          live dropdown filtering
+├── example_workflows/       example workflow (H3 Film Factory)
 └── tests/test_h3_accel.py   self-test
 ```
 
