@@ -400,19 +400,19 @@ def _rule_matches(rule, info):
 def default_recipe(info):
     """Fallback sampling recipe when the catalog has nothing for this file."""
     if info.kind == "pdd":
-        return ("PDD 8/4 步 · sampler=euler · CFG=1.0 · SigmaShift 12.0/3.0 · "
-                "sigmas 走 PDD 节点的输出 · 强度 1.0 · 不要与其它蒸馏 LoRA 叠加")
+        return ("PDD 8/4 steps · sampler=euler · CFG=1.0 · SigmaShift 12.0/3.0 · "
+                "sigmas from the PDD node output · strength 1.0 · do not stack with other distilled LoRAs")
     if info.kind == "turbo":
-        return ("少步蒸馏 · CFG=1.0 · 强度 1.0（噪声大降到 0.6–0.8）· "
-                "步数按文件标称 · 不要与其它蒸馏 LoRA 叠加")
+        return ("Few-step distillation · CFG=1.0 · strength 1.0 (lower to 0.6-0.8 when noisy) · "
+                "steps per the file spec · do not stack with other distilled LoRAs")
     if info.kind == "hyperflow":
-        return ("8 步 · 手动 sigma: 1.0, 0.931506, 0.839236, 0.703462, 0.5, "
-                "0.296538, 0.160764, 0.068494, 0.0 · 或 euler/normal")
+        return ("8 steps · manual sigma: 1.0, 0.931506, 0.839236, 0.703462, 0.5, "
+                "0.296538, 0.160764, 0.068494, 0.0 · or euler/normal")
     if info.kind in ("taomate", "dmad", "pdmd", "elm", "flashgen", "faststep"):
-        return f"{info.kind} 少步蒸馏 · CFG=1.0（>1.0 会烧）· 强度 1.0 · 按文件标称步数"
+        return f"{info.kind} few-step distillation · CFG=1.0 (>1.0 burns) · strength 1.0 · steps per the file spec"
     if info.kind == "veda":
-        return "Veda 稀疏注意力权重 · 配合 VedaSparse 节点使用"
-    return "未识别配方：请查该文件模型卡"
+        return "Veda sparse-attention weights · use with the VedaSparse nodes"
+    return "Unrecognised recipe: check the file model card"
 
 
 # --------------------------------------------------------------------------
@@ -617,31 +617,31 @@ def judge(base, lora):
     if lora.kind == "pdd":
         if base.trunk in ("fl2va", "ref2va") and lora.trunk in ("fl2va", "ref2va") \
                 and base.trunk != lora.trunk:
-            return BAD, (f"PDD 文件是 {lora.trunk.upper()} 蒸馏，基座是 "
-                         f"{base.trunk.upper()} 主干 -- 两者 key 集合相同，会安静地画错。"
-                         f"请改用 {base.trunk.upper()} 版 PDD 文件。")
+            return BAD, (f"PDD file is distilled from {lora.trunk.upper()}, but the base is "
+                         f"{base.trunk.upper()} trunk -- the key sets are identical, so it paints the wrong thing silently."
+                         f"Use the {base.trunk.upper()} version of the PDD file instead.")
         if base.pdd_steps > 1:
-            return WARN, ("基座已自带烘焙好的 PDD 头组（pdd_steps>1），外部 PDD 头组冗余；"
-                          "若基座是烘焙主干版，把 lora_strength 设为 0.0。")
-        return OK, "PDD 头组 + 主干 LoRA，匹配。"
+            return WARN, ("The base already ships a baked PDD head group (pdd_steps>1); an external PDD head group is redundant; "
+                          "if the base is a baked-trunk build, set lora_strength to 0.0.")
+        return OK, "PDD head group + trunk LoRA: match."
 
     if base.trunk in ("fl2va", "ref2va") and lora.trunk in ("fl2va", "ref2va") \
             and base.trunk != lora.trunk:
-        return BAD, (f"文件蒸馏于 {lora.trunk.upper()}，基座是 {base.trunk.upper()} 主干。"
-                     f"两棵主干张量 key 完全相同，套上去不会报错，只会安静地画错。")
+        return BAD, (f"File distilled from {lora.trunk.upper()}, base is the {base.trunk.upper()} trunk."
+                     f"The two trunks share identical tensor keys, so applying it raises no error and only paints the wrong thing silently.")
 
     if base.trunk == "hybrid":
-        return WARN, ("基座是 fl2va+ref2va 混合主干，PDD 对混合主干属 off-label"
-                      "（训练在纯主干上）-- 建议先与匹配的纯主干 A/B 对比。")
+        return WARN, ("The base is a fl2va+ref2va hybrid trunk; PDD on a hybrid trunk is off-label "
+                      "(it was trained on pure trunks) -- A/B it against a matching pure trunk first.")
 
     # A style / functional LoRA is not an acceleration artifact at all --
     # judged before the build checks, which would otherwise call it "OK" on
     # the strength of a matching adaln width.
     if lora.kind in ("style", "unknown"):
-        return NA, "这不是加速/少步蒸馏文件，是风格或功能 LoRA。"
+        return NA, "This is not an acceleration/few-step distillation file; it is a style or utility LoRA."
 
     if lora.trunk == "unknown":
-        return WARN, "无法从文件名/权重确定该文件的蒸馏目标主干，兼容性未验证。"
+        return WARN, "Cannot determine the file target trunk from its name/weights; compatibility is unverified."
 
     # ---- build compatibility ----
     # The asymmetry is deliberate:
@@ -651,18 +651,18 @@ def judge(base, lora):
     #     but the adaln half of the distill was stripped by the converter, so
     #     the result is weaker than the original full-model file. Warn, not fail.
     if base.build == "pruned" and lora.build == "full":
-        return BAD, ("基座是剪枝（曲线形式 adaln）版，而该文件带 dense adaln 适配器"
-                     "（输入宽度 2688）-- 形状对不上，ComfyUI 会刷一串 adaln_proj 报错并"
-                     "静默丢掉这部分蒸馏。请改用剪枝版/无 adaln 版文件。")
+        return BAD, ("The base is the pruned (curve-form adaln) build, but the file carries a dense adaln adapter "
+                     "(input width 2688) -- the shapes do not line up; ComfyUI will spew adaln_proj errors and "
+                     "silently drop that part of the distillation. Use the pruned / no-adaln file instead.")
     if base.build == "full" and lora.build == "pruned":
-        return WARN, ("该文件是为剪枝基座做的兼容转换版（dense adaln 适配器已被剥掉），"
-                      "在完整版基座上能加载，但蒸馏强度弱于原版完整文件。")
+        return WARN, ("This file is a compatibility conversion for the pruned base (its dense adaln adapter was stripped), "
+                      "so it loads on a full base but distils weaker than the original full file.")
     if base.build == "pruned" and lora.build == "any":
-        return OK, "该文件不含 dense adaln 适配器，在剪枝基座上可直接使用。"
+        return OK, "This file has no dense adaln adapter and can be used directly on the pruned base."
     if base.build == "full" and lora.build == "any":
-        return OK, "该文件不含 dense adaln 适配器，完整版基座上可直接使用。"
+        return OK, "This file has no dense adaln adapter and can be used directly on the full base."
 
-    return OK, "主干与构建均匹配。"
+    return OK, "Trunk and build both match."
 
 
 # --------------------------------------------------------------------------
@@ -673,14 +673,14 @@ def format_report(base, items, max_rows=200):
     """Human-readable report: the base on top, then every candidate."""
     lines = []
     lines.append("=" * 78)
-    lines.append("MiniMax-H3 加速 LoRA 适配报告")
+    lines.append("MiniMax-H3 acceleration LoRA compatibility report")
     lines.append("=" * 78)
-    lines.append(f"基座        : {base.name or '(未命名)'}")
-    lines.append(f"主干        : {base.trunk}    (判定来源: {base.source})")
-    lines.append(f"构建        : {base.build}"
-                 f"{'  (剪枝=曲线形式 adaln)' if base.build == 'pruned' else ''}")
+    lines.append(f"Base        : {base.name or '(unnamed)'}")
+    lines.append(f"Trunk       : {base.trunk}    (source: {base.source})")
+    lines.append(f"Build       : {base.build}"
+                 f"{'  (pruned = curve-form adaln)' if base.build == 'pruned' else ''}")
     if base.pdd_steps > 1:
-        lines.append(f"内置 PDD    : pdd_steps={base.pdd_steps}  (已烘焙头组)")
+        lines.append(f"Baked PDD   : pdd_steps={base.pdd_steps}  (head group baked)")
     for n in base.notes:
         lines.append(f"  · {n}")
     lines.append("")
@@ -690,7 +690,7 @@ def format_report(base, items, max_rows=200):
         counts[it[0]] = counts.get(it[0], 0) + 1
     summary = "  ".join(f"{STATUS_LABEL.get(k, k)}={v}" for k, v in
                         sorted(counts.items(), key=lambda kv: -kv[1]))
-    lines.append(f"候选加速文件 {len(items)} 个   {summary}")
+    lines.append(f"Candidate acceleration files: {len(items)}   {summary}")
     lines.append("-" * 78)
 
     order = {OK: 0, WARN: 1, NA: 2, BAD: 3}
@@ -699,15 +699,15 @@ def format_report(base, items, max_rows=200):
         tag = STATUS_LABEL.get(status, status)
         head = f"[{tag:^8}] {lora.display}"
         if lora.nfe:
-            head += f"  ({lora.nfe} 步)"
+            head += f"  ({lora.nfe} steps)"
         lines.append(head)
-        lines.append(f"           目录={lora.folder}  类型={lora.kind}  "
-                     f"主干={lora.trunk}  构建={lora.build}"
-                     f"{'  需PDD节点' if lora.loader == 'pdd' else ''}")
+        lines.append(f"           folder={lora.folder}  kind={lora.kind}  "
+                     f"trunk={lora.trunk}  build={lora.build}"
+                     f"{'  needs PDD node' if lora.loader == 'pdd' else ''}")
         lines.append(f"           {reason}")
         if lora.recipe:
-            lines.append(f"           配方: {lora.recipe}")
+            lines.append(f"           recipe: {lora.recipe}")
         lines.append("")
     if len(rows) > max_rows:
-        lines.append(f"... 还有 {len(rows) - max_rows} 个未显示")
+        lines.append(f"... {len(rows) - max_rows} more not shown")
     return "\n".join(lines)

@@ -91,7 +91,7 @@ async function refreshPicker(node) {
         const combo = (node.widgets || []).find((w) => w.name === "accel_lora");
         if (!combo) return;
         if (!values.length) {
-            setComboOptions(combo, ["（该基座下没有匹配的加速 LoRA）"]);
+            setComboOptions(combo, ["(No matching acceleration LoRA for this base)"]);
             combo.disabled = true;
             return;
         }

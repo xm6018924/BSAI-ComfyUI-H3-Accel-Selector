@@ -238,15 +238,15 @@ def _delegate_pdd(model, lora, nfe, partition, check_mode):
     cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("MiniMaxH3PDDAccApply")
     if cls is None:
         raise ValueError(
-            "这个文件是 PDD 加速文件（带并行解码蒸馏头组），普通 LoRA 加载器读不了。\n"
-            "请先安装 BSAI-ComfyUI-MiniMax-H3-PDD-Acc 插件，本节点会自动把加载委托给它。")
+            "This file is a PDD acceleration file (with a parallel-decode distillation head), which a plain LoRA loader cannot read.\n"
+            "Install the BSAI-ComfyUI-MiniMax-H3-PDD-Acc pack; this node delegates the load to it automatically.")
     # The PDD Acc node's file list comes from models/pdd_acc/ only.
     available = folder_paths.get_filename_list("pdd_acc")
     name = os.path.basename(lora.relpath)
     if name not in available:
         raise ValueError(
-            f"PDD 文件 {name} 不在 models/pdd_acc/ 目录里，PDD Acc 节点扫描不到它。\n"
-            f"请把它移动到 ComfyUI/models/pdd_acc/ 后重试（当前位置：{lora.key}）。")
+            f"PDD file {name} is not in models/pdd_acc/, so the PDD Acc node cannot see it.\n"
+            f"Move it to ComfyUI/models/pdd_acc/ and retry (current location: {lora.key}).")
     pdd_check = "strict" if check_mode == "strict" else ("warn" if check_mode == "warn" else "off")
     out = cls().apply(model, name, nfe, 1.0, 1.0, "raise", partition, True, None, pdd_check)
     return out  # (model, sigmas, info)
@@ -263,11 +263,11 @@ class H3AccelBaseInfo:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model": ("MODEL", {"tooltip": "已加载的 MiniMax-H3 扩散模型"}),
+                "model": ("MODEL", {"tooltip": "Loaded MiniMax-H3 diffusion model"}),
             },
             "optional": {
                 "base_hint": ("STRING", {"default": "",
-                                         "tooltip": "上游加载器里的基座文件名（前端自动填写，用于指纹未命中时兜底）"}),
+                                         "tooltip": "Base filename from the upstream loader (auto-filled by the frontend; used as a fallback when the fingerprint misses)"}),
             },
         }
 
@@ -275,17 +275,17 @@ class H3AccelBaseInfo:
     RETURN_NAMES = ("trunk", "build", "pdd_state", "info")
     FUNCTION = "inspect"
     CATEGORY = "model/minimax"
-    DESCRIPTION = ("识别已加载的 MiniMax-H3 基座：fl2va / ref2va 主干、完整版 / 剪枝版构建、"
-                   "以及是否已自带烘焙好的 PDD 头组。主干靠 final_layer.video_out 指纹判定。")
+    DESCRIPTION = ("Identify the loaded MiniMax-H3 base: fl2va / ref2va trunk, full / pruned build, "
+                   "and whether it already ships a baked PDD head group. The trunk is identified by the final_layer.video_out fingerprint.")
 
     def inspect(self, model, base_hint=""):
         base = identify_base(model, base_hint)
         pdd = "baked" if base.pdd_steps > 1 else "none"
         info = "\n".join(
-            [f"基座: {base.name or '(未命名)'}",
-             f"主干: {base.trunk}  (判定来源: {base.source})",
-             f"构建: {base.build}",
-             f"内置 PDD 头组: {pdd} (pdd_steps={base.pdd_steps})"]
+            [f"Base: {base.name or '(unnamed)'}",
+             f"Trunk: {base.trunk}  (source: {base.source})",
+             f"Build: {base.build}",
+             f"Baked PDD head group: {pdd} (pdd_steps={base.pdd_steps})"]
             + [f"· {n}" for n in base.notes])
         return (base.trunk, base.build, pdd, info)
 
@@ -297,28 +297,28 @@ class H3AccelLoRAPicker:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model": ("MODEL", {"tooltip": "已加载的 MiniMax-H3 扩散模型"}),
+                "model": ("MODEL", {"tooltip": "Loaded MiniMax-H3 diffusion model"}),
                 "accel_lora": (accel_lora_choices(),
-                               {"tooltip": "候选加速 LoRA。下拉框由前端按基座自动筛选；"
-                                           "PDD 文件会委托给 BSAI PDD-Acc 节点加载。"}),
+                               {"tooltip": "Candidate acceleration LoRA. The frontend filters the dropdown by base; "
+                                           "PDD files are delegated to the BSAI PDD-Acc node."}),
                 "strength_model": ("FLOAT", {"default": 1.0, "min": -2.0, "max": 2.0, "step": 0.01,
-                                             "tooltip": "LoRA 强度。蒸馏 LoRA 训练于 1.0；"
-                                                        "PDD 文件的强度由 PDD 节点自己的 lora_strength 控制，此值对 PDD 无效。"}),
+                                             "tooltip": "LoRA strength. Distilled LoRAs are trained at 1.0; "
+                                                        "a PDD file's strength is controlled by the PDD node's own lora_strength, so this value does not apply to PDD."}),
                 "check_mode": (["strict", "warn", "off"], {"default": "strict",
-                                "tooltip": "strict = 主干/构建不匹配直接报错（防静默画错）；"
-                                           "warn = 只警告继续；off = 不检查。"}),
+                                "tooltip": "strict = hard error on a trunk/build mismatch (prevents silently wrong output); "
+                                           "warn = warn and continue; off = no check."}),
             },
             "optional": {
                 "pdd_nfe": (["8", "4", "6"], {"default": "8",
-                              "tooltip": "仅 PDD 文件有效。模型评估次数：8 = 训练块大小，4 = 官方认可的合并，"
-                                         "6 = 非均匀分区 8,8,4,4,4,4。"}),
+                              "tooltip": "PDD files only. Model evaluation count: 8 = training block size, 4 = the officially endorsed merge, "
+                                         "6 = non-uniform partition 8,8,4,4,4,4."}),
                 "pdd_partition": ("STRING", {"default": "",
-                              "tooltip": "仅 PDD 文件有效。自定义块大小（细步），逗号分隔，合计 32，"
-                                         "如 8,4,4,4,4,4,4 = 7 步。"}),
+                              "tooltip": "PDD files only. Custom block sizes (fine steps), comma-separated, summing to 32, "
+                                         "e.g. 8,4,4,4,4,4,4 = 7 steps."}),
                 "base_hint": ("STRING", {"default": "",
-                              "tooltip": "上游加载器里的基座文件名（前端自动填写）"}),
+                              "tooltip": "Base filename from the upstream loader (auto-filled by the frontend)"}),
                 "show_incompatible": ("BOOLEAN", {"default": False,
-                              "tooltip": "下拉框里是否也显示不匹配的文件（默认只显示可用项）"}),
+                              "tooltip": "Also show non-matching files in the dropdown (only usable items are shown by default)"}),
             },
         }
 
@@ -326,8 +326,8 @@ class H3AccelLoRAPicker:
     RETURN_NAMES = ("model", "sigmas", "info", "compatible")
     FUNCTION = "pick"
     CATEGORY = "model/patch/minimax"
-    DESCRIPTION = ("按基座自动筛选并加载 MiniMax-H3 加速 LoRA。fl2va 与 ref2va 两棵主干张量 key "
-                   "完全相同，配错不会报错、只会安静地画错 —— 本节点用指纹识别基座并拦截。")
+    DESCRIPTION = ("Filter and load the MiniMax-H3 acceleration LoRA by base. The fl2va and ref2va trunks share identical tensor keys, "
+                   "so a mismatch raises no error and only paints the wrong thing silently - this node fingerprints the base and blocks it.")
 
     def pick(self, model, accel_lora, strength_model, check_mode,
              pdd_nfe="8", pdd_partition="", base_hint="", show_incompatible=False):
@@ -344,15 +344,15 @@ class H3AccelLoRAPicker:
                 folder, rel = accel_lora.split("/", 1) if "/" in accel_lora else ("loras", accel_lora)
                 lora = core.classify_lora_file(path, folder, rel, _catalog_for_base(base))
             except Exception as exc:
-                raise ValueError(f"找不到加速文件 {accel_lora}: {exc}")
+                raise ValueError(f"Acceleration file not found {accel_lora}: {exc}")
 
         status, reason = core.judge(base, lora)
 
         if status == core.BAD:
-            msg = (f"H3 加速 LoRA 配对错误：{reason}\n"
-                   f"文件: {lora.key}\n"
-                   f"基座: {base.name or '(未命名)'}  主干={base.trunk}  构建={base.build}\n"
-                   f"如确为故意实验，把 check_mode 改成 warn。")
+            msg = (f"H3 acceleration LoRA mismatch: {reason}\n"
+                   f"File: {lora.key}\n"
+                   f"Base: {base.name or '(unnamed)'}  trunk={base.trunk}  build={base.build}\n"
+                   f"If this is an intentional experiment, set check_mode to warn.")
             if check_mode == "strict":
                 raise ValueError(msg)
             log.warning("H3 Accel LoRA Picker: %s", msg)
@@ -365,18 +365,18 @@ class H3AccelLoRAPicker:
             extra = pdd_info
         elif lora.loader == "veda":
             raise ValueError(
-                f"{lora.key} 是 Veda 稀疏注意力权重，不是普通 LoRA。\n"
-                "请改用 BSAI-ComfyUI-VedaSparse 插件的节点加载它。")
+                f"{lora.key} is Veda sparse-attention weights, not a plain LoRA.\n"
+                "Load it with the BSAI-ComfyUI-VedaSparse nodes instead.")
         else:
             out_model = _apply_plain_lora(model, lora.path, strength_model)
             extra = ""
 
         info = "\n".join(filter(None, [
-            f"基座: {base.name or '(未命名)'}  主干={base.trunk}  构建={base.build}",
-            f"文件: {lora.key}",
-            f"类型: {lora.kind}  步数: {lora.nfe or '-'}  判定: {core.STATUS_LABEL.get(status, status)}",
-            f"结论: {reason}",
-            f"配方: {lora.recipe}" if lora.recipe else "",
+            f"Base: {base.name or '(unnamed)'}  trunk={base.trunk}  build={base.build}",
+            f"File: {lora.key}",
+            f"Kind: {lora.kind}  steps: {lora.nfe or '-'}  verdict: {core.STATUS_LABEL.get(status, status)}",
+            f"Conclusion: {reason}",
+            f"Recipe: {lora.recipe}" if lora.recipe else "",
             extra,
         ]))
         return (out_model, sigmas, info, status == core.OK)
@@ -389,13 +389,13 @@ class H3AccelReport:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model": ("MODEL", {"tooltip": "已加载的 MiniMax-H3 扩散模型"}),
+                "model": ("MODEL", {"tooltip": "Loaded MiniMax-H3 diffusion model"}),
             },
             "optional": {
                 "base_hint": ("STRING", {"default": "",
-                                         "tooltip": "上游加载器里的基座文件名（前端自动填写）"}),
+                                         "tooltip": "Base filename from the upstream loader (auto-filled by the frontend)"}),
                 "include_incompatible": ("BOOLEAN", {"default": True,
-                                        "tooltip": "是否也列出不匹配 / 非加速的文件"}),
+                                        "tooltip": "Also list non-matching / non-acceleration files"}),
             },
         }
 
@@ -404,8 +404,8 @@ class H3AccelReport:
     FUNCTION = "report"
     OUTPUT_NODE = True
     CATEGORY = "model/minimax"
-    DESCRIPTION = ("生成当前基座的加速 LoRA 适配报告：识别基座，逐个判定每个加速文件，"
-                   "并给出对应采样配方。")
+    DESCRIPTION = ("Generate an acceleration-LoRA compatibility report for the current base: identify the base, judge each acceleration file, "
+                   "and give the matching sampling recipe.")
 
     def report(self, model, base_hint="", include_incompatible=True):
         base = identify_base(model, base_hint)
@@ -422,18 +422,18 @@ class H3AccelReport:
         strays = [i for i in everything if not i.is_lora]
         if strays:
             text += "\n" + "-" * 78 + "\n"
-            text += "以下文件在 LoRA 目录里，但不是 LoRA（0 个适配器对），已排除：\n"
+            text += "These files are in the LoRA folder but are not LoRAs (0 adapter pairs) and were excluded:\n"
             for i in strays:
                 text += f"  · {i.key}  ({i.size / (1 << 30):.2f} GiB)\n"
-            text += "  这些多半是完整 checkpoint 被放错了目录，请用 UNETLoader 加载。\n"
+            text += "  These are most likely full checkpoints in the wrong folder; load them with UNETLoader.\n"
 
         if include_incompatible:
             others = [i for i in everything
                       if i.is_lora and not core.is_accel_candidate(i)]
             if others:
                 text += "\n" + "-" * 78 + "\n"
-                text += f"另有 {len(others)} 个 H3 LoRA 不属于加速/少步蒸馏（风格、功能类），"
-                text += "未列入上表：\n"
+                text += f"{len(others)} more H3 LoRAs are not acceleration/few-step distillation (style or utility): "
+                text += "not listed above:\n"
                 for i in sorted(others, key=lambda x: x.display.lower()):
                     text += f"  · {i.display}\n"
 
@@ -448,10 +448,10 @@ class H3AccelFingerprintBake:
         return {
             "required": {
                 "base_file": (folder_paths.get_filename_list("diffusion_models"),
-                              {"tooltip": "要登记指纹的基座（只读取 final_layer.video_out 这一个张量）"}),
+                              {"tooltip": "Base to fingerprint (reads only the single final_layer.video_out tensor)"}),
                 "trunk_name": ("STRING", {"default": "",
-                              "tooltip": "给它起一个主干名，例如 fl2va / ref2va / xueluo_ref2va。"
-                                         "留空则自动判断（能匹配已有指纹就用匹配的）。"}),
+                              "tooltip": "Give it a trunk name, e.g. fl2va / ref2va / xueluo_ref2va. "
+                                         "Leave empty to auto-detect (uses the matching fingerprint when one exists)."}),
             },
         }
 
@@ -459,8 +459,8 @@ class H3AccelFingerprintBake:
     RETURN_NAMES = ("info",)
     FUNCTION = "bake"
     CATEGORY = "model/minimax"
-    DESCRIPTION = ("为自定义 / 微调基座烘焙主干指纹。读取 final_layer.video_out（约 1MB），"
-                   "写成 fp16 指纹放进插件的 fingerprints/ 目录，之后本插件就能认出这个基座。")
+    DESCRIPTION = ("Bake a trunk fingerprint for a custom / fine-tuned base. Reads final_layer.video_out (~1MB), "
+                   "writes an fp16 fingerprint into the plugin's fingerprints/ folder, after which this plugin recognises the base.")
 
     def bake(self, base_file, trunk_name=""):
         import torch
@@ -468,21 +468,29 @@ class H3AccelFingerprintBake:
         try:
             path = folder_paths.get_full_path_or_raise("diffusion_models", base_file)
         except Exception as exc:
-            return (f"找不到基座文件 {base_file}: {exc}",)
+            return (f"Base file not found {base_file}: {exc}",)
 
         from safetensors import safe_open
         with safe_open(path, framework="pt") as f:
             keys = [k for k in f.keys() if k.endswith("final_layer.video_out.weight")]
             if len(keys) != 1:
-                return (f"{base_file} 里找不到唯一的 final_layer.video_out.weight"
-                        f"（找到 {len(keys)} 个）—— 这可能不是 MiniMax-H3 基座。",)
+                return (f"No unique final_layer.video_out.weight in {base_file}"
+                        f"(found {len(keys)}) - this may not be a MiniMax-H3 base.",)
             w = f.get_tensor(keys[0]).to(torch.float32)
 
         out_dir = os.path.join(PLUGIN_DIR, "fingerprints")
         os.makedirs(out_dir, exist_ok=True)
 
         name = (trunk_name or "").strip()
-        if not name:
+        if name:
+            # A user-supplied trunk name becomes part of the output file name, so it
+            # must be a plain name (same rule as the fallback below); refuse anything
+            # else instead of letting it escape the fingerprints/ folder.
+            plain = "".join(ch for ch in name if ch.isascii() and (ch.isalnum() or ch in "-_"))
+            if plain != name or len(name) > 48:
+                return (f"Trunk name {trunk_name!r} is not a plain name: only ASCII letters, "
+                        f"digits, '-' and '_' are allowed (max 48 characters).",)
+        else:
             matched, dists = core.identify_trunk(w, load_fingerprints())
             if matched:
                 name = matched
@@ -499,10 +507,10 @@ class H3AccelFingerprintBake:
         global _fingerprints
         _fingerprints = None
         err = float((w - w.half().float()).norm() / w.norm())
-        return (f"已写入 {dst}\n"
-                f"主干名: {name}\n"
-                f"张量: {list(w.shape)} fp16 存储误差 {err:.2e}\n"
-                f"重启 ComfyUI 后生效。",)
+        return (f"Wrote {dst}\n"
+                f"Trunk name: {name}\n"
+                f"Tensor: {list(w.shape)} fp16 storage error {err:.2e}\n"
+                f"Restart ComfyUI to take effect.",)
 
 
 # --------------------------------------------------------------------------
@@ -513,7 +521,7 @@ def accel_lora_choices():
     """The combo list: every acceleration file on disk, keyed folder/relpath."""
     items = scan_candidates()
     keys = sorted({i.key for i in items})
-    return keys or ["（未找到任何加速 LoRA —— 请把文件放进 models/loras/ 或 models/pdd_acc/）"]
+    return keys or ["(No matching acceleration LoRA - put files in models/loras/ or models/pdd_acc/)"]
 
 
 NODE_CLASS_MAPPINGS = {
@@ -524,8 +532,8 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "H3AccelBaseInfo": "H3 Accel Base Info (主干/构建识别)",
-    "H3AccelLoRAPicker": "H3 Accel LoRA Picker (按基座筛选并加载)",
-    "H3AccelReport": "H3 Accel Report (加速 LoRA 适配报告)",
-    "H3AccelFingerprintBake": "H3 Accel Fingerprint Bake (登记自定义基座)",
+    "H3AccelBaseInfo": "H3 Accel Base Info (trunk/build detection)",
+    "H3AccelLoRAPicker": "H3 Accel LoRA Picker (filter and load by base)",
+    "H3AccelReport": "H3 Accel Report (acceleration LoRA compatibility report)",
+    "H3AccelFingerprintBake": "H3 Accel Fingerprint Bake (register a custom base)",
 }
